@@ -101,7 +101,8 @@ func OverridePayload(p *crossplane.Payload, o OverrideProvider) error {
 
 func overrideDirectives(ds *[]crossplane.Directive, o OverrideProvider, abspath string) error {
 	for i := range *ds {
-		err := overrideDirective(&(*ds)[i], o, abspath)
+		directive := (*ds)[i]
+		err := overrideDirective(&directive, o, abspath)
 		if err != nil {
 			return err
 		}
