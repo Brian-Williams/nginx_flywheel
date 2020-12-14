@@ -52,12 +52,11 @@ func WritePayloadTmp(p *crossplane.Payload, options *crossplane.BuildOptions) ([
 	for i, c := range p.Config {
 		// Force flat structure; files can be given correct structure with `Rename`
 		f, err := os.Create(filepath.Join(tmpDir, filepath.Base(c.File)))
+		// This defer should fail under normal operation
+		defer f.Close()
 		if err != nil {
 			return tmpFiles, fmt.Errorf("failed to create file: %w", err)
 		}
-		// This defer should fail under normal operation
-		defer f.Close()
-
 		tmpFiles[i] = UpdatedFile{f, c.File}
 
 		err = writeConfig(f.Name(), c, options)
@@ -75,19 +74,16 @@ func WritePayloadTmp(p *crossplane.Payload, options *crossplane.BuildOptions) ([
 // searching for the NGINX conf files.
 func writeConfig(f string, c crossplane.Config, options *crossplane.BuildOptions) error {
 	fd, err := os.Create(f)
+	defer fd.Close()
 	if err != nil {
 		return fmt.Errorf("failed to create NGINX config file: %w", err)
 	}
-	defer fd.Close()
 	w := bufio.NewWriter(fd)
 	err = crossplane.Build(w, c, options)
 	if err != nil {
 		return fmt.Errorf("failed to write NGINX file: %w", err)
 	}
-	err = w.Flush()
-	if err != nil {
-		return fmt.Errorf("failed to flush writer: %w", err)
-	}
+	w.Flush()
 	return fd.Sync()
 }
 
@@ -105,8 +101,7 @@ func OverridePayload(p *crossplane.Payload, o OverrideProvider) error {
 
 func overrideDirectives(ds *[]crossplane.Directive, o OverrideProvider, abspath string) error {
 	for i := range *ds {
-		directive := (*ds)[i]
-		err := overrideDirective(&directive, o, abspath)
+		err := overrideDirective(&(*ds)[i], o, abspath)
 		if err != nil {
 			return err
 		}
