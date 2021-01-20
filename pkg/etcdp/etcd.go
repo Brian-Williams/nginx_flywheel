@@ -20,21 +20,12 @@ type Etcd3Provider struct {
 
 var _ flywheel.OverrideProvider = (*Etcd3Provider)(nil)
 
-// New creates an Etcd3Provider
-func New(config clientv3.Config, lstrip string) (*Etcd3Provider, error) {
-	cli, err := clientv3.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return &Etcd3Provider{Client: cli, LStrip: lstrip}, nil
-}
-
 // Override satisfies the OverrideProvider interface
-func (e *Etcd3Provider) Override(directive, path string) ([]string, error) {
+func (e *Etcd3Provider) Override(ctx context.Context, directive, path string) ([]string, error) {
 	key := e.DirectiveKey(directive, path)
 
 	// Context should be configured in New, so that ctx doesn't infect every method
-	r, err := e.Client.Get(context.Background(), key)
+	r, err := e.Client.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}

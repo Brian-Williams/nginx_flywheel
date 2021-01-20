@@ -1,6 +1,7 @@
 package flywheel
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
@@ -15,7 +16,7 @@ var parsedExample = `{"status":"ok","errors":[],"config":[{"file":"../../test/ng
 
 type dummyProvider struct{}
 
-func (d dummyProvider) Override(directive, path string) ([]string, error) {
+func (d dummyProvider) Override(_ context.Context, directive, path string) ([]string, error) {
 	return []string{"dummy" + directive}, nil
 }
 
@@ -28,7 +29,7 @@ func TestWritePayloadTmp(t *testing.T) {
 	if err := json.Unmarshal([]byte(parsedExample), &payload); err != nil {
 		t.Fatalf("failed to unmarshal test data: %v", err)
 	}
-	err := OverridePayload(&payload, dummyProvider{})
+	err := OverridePayload(context.Background(), &payload, dummyProvider{})
 	if err != nil {
 		t.Fatalf("failed to override payload: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestOverrideDirective(t *testing.T) {
 		Line:      1,
 		Args:      []string{"hi", "mom"},
 	}
-	overrideDirective(&directive, dummyProvider{}, "")
+	overrideDirective(context.Background(), &directive, dummyProvider{}, "")
 
 	if !reflect.DeepEqual(directive.Args, []string{"dummyfoo"}) {
 		t.Errorf("failed to modify args")

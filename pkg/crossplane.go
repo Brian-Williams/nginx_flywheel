@@ -2,6 +2,7 @@ package flywheel
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,7 +13,7 @@ import (
 
 // OverrideProvider produces nginx args for a given directive
 type OverrideProvider interface {
-	Override(directive string, path string) ([]string, error)
+	Override(ctx context.Context, directive string, path string) ([]string, error)
 	Close() error
 }
 
@@ -52,11 +53,11 @@ func WritePayloadTmp(p *crossplane.Payload, options *crossplane.BuildOptions) ([
 	for i, c := range p.Config {
 		// Force flat structure; files can be given correct structure with `Rename`
 		f, err := os.Create(filepath.Join(tmpDir, filepath.Base(c.File)))
-		// This defer should fail under normal operation
-		defer f.Close()
 		if err != nil {
 			return tmpFiles, fmt.Errorf("failed to create file: %w", err)
 		}
+		// This defer should fail under normal operation
+		defer f.Close()
 		tmpFiles[i] = UpdatedFile{f, c.File}
 
 		err = writeConfig(f.Name(), c, options)
@@ -74,24 +75,30 @@ func WritePayloadTmp(p *crossplane.Payload, options *crossplane.BuildOptions) ([
 // searching for the NGINX conf files.
 func writeConfig(f string, c crossplane.Config, options *crossplane.BuildOptions) error {
 	fd, err := os.Create(f)
-	defer fd.Close()
 	if err != nil {
 		return fmt.Errorf("failed to create NGINX config file: %w", err)
 	}
+	defer fd.Close()
 	w := bufio.NewWriter(fd)
 	err = crossplane.Build(w, c, options)
 	if err != nil {
 		return fmt.Errorf("failed to write NGINX file: %w", err)
 	}
-	w.Flush()
-	return fd.Sync()
+	err = w.Flush()
+	if err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
+	if err = fd.Sync(); err != nil {
+		return fmt.Errorf("failed to sync write: %w", err)
+	}
+	return nil
 }
 
 // OverridePayload overrides each config in the payload
-func OverridePayload(p *crossplane.Payload, o OverrideProvider) error {
+func OverridePayload(ctx context.Context, p *crossplane.Payload, o OverrideProvider) error {
 	for i := range p.Config {
 		config := p.Config[i]
-		err := overrideDirectives(&config.Parsed, o, config.File)
+		err := overrideDirectives(ctx, &config.Parsed, o, config.File)
 		if err != nil {
 			return err
 		}
@@ -99,9 +106,13 @@ func OverridePayload(p *crossplane.Payload, o OverrideProvider) error {
 	return nil
 }
 
-func overrideDirectives(ds *[]crossplane.Directive, o OverrideProvider, abspath string) error {
-	for i := range *ds {
-		err := overrideDirective(&(*ds)[i], o, abspath)
+func overrideDirectives(ctx context.Context, ds *[]crossplane.Directive, o OverrideProvider, abspath string) error {
+	if ds == nil {
+		return fmt.Errorf("directive list is nil for: %v", abspath)
+	}
+	dsValues := *ds
+	for i := range dsValues {
+		err := overrideDirective(ctx, &dsValues[i], o, abspath)
 		if err != nil {
 			return err
 		}
@@ -110,11 +121,14 @@ func overrideDirectives(ds *[]crossplane.Directive, o OverrideProvider, abspath 
 }
 
 // overrideDirective overrides a single directives args
-func overrideDirective(d *crossplane.Directive, o OverrideProvider, abspath string) error {
+func overrideDirective(ctx context.Context, d *crossplane.Directive, o OverrideProvider, abspath string) error {
+	if d == nil {
+		return fmt.Errorf("directive is nil for: %v", abspath)
+	}
 	if d.IsComment() {
 		return nil
 	}
-	args, err := o.Override(d.Directive, abspath)
+	args, err := o.Override(ctx, d.Directive, abspath)
 	if err != nil {
 		return err
 	}
@@ -122,8 +136,18 @@ func overrideDirective(d *crossplane.Directive, o OverrideProvider, abspath stri
 		d.Args = args
 	}
 	if d.IsBlock() {
-		overrideDirectives(d.Block, o, abspath)
+		if d.Block != nil {
+			overrideDirectives(ctx, d.Block, o, abspath)
+		}
 	}
 
 	return nil
+}
+
+type new string
+
+var New new = "NEW"
+
+func newDirective(ctx context.Context, p *crossplane.Payload) {
+
 }
