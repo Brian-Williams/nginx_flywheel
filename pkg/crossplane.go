@@ -143,11 +143,3 @@ func overrideDirective(ctx context.Context, d *crossplane.Directive, o OverrideP
 
 	return nil
 }
-
-type new string
-
-var New new = "NEW"
-
-func newDirective(ctx context.Context, p *crossplane.Payload) {
-
-}
