@@ -16,10 +16,12 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/Brian-Williams/nginx_flywheel/pkg"
 	"github.com/Brian-Williams/nginx_flywheel/pkg/etcdp"
+
+	"github.com/Brian-Williams/nginx_flywheel/pkg"
 	"github.com/aluttik/go-crossplane"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/rs/zerolog/log"
@@ -38,22 +40,23 @@ var (
 			log.Debug().
 				Str("path", sourcePath).
 				Msg("Parsing file")
-			// payload, err := crossplane.Parse(sourcePath, &crossplane.ParseOptions{ParseComments: true})
-			payload, err := crossplane.Parse(sourcePath, &crossplane.ParseOptions{})
+			payload, err := crossplane.Parse(sourcePath, &crossplane.ParseOptions{ParseComments: true})
 			if err != nil {
 				msg := "failed to parse source file"
 				log.Err(err).Str("file", sourcePath).Msg(msg)
-				return fmt.Errorf(msg)
+				return fmt.Errorf(msg+": %w", err)
 			}
 
 			log.Print("Replacing directive keys from etcd")
-			overrider, err := etcdp.New(clientv3.Config{Endpoints: endpoints}, lstrip)
+			client, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
 			if err != nil {
 				msg := "invalid NGINX configuration"
 				log.Err(err).Strs("endpoints", endpoints).Msg(msg)
 				return fmt.Errorf(msg)
 			}
-			err = flywheel.OverridePayload(payload, overrider)
+			overrider := &etcdp.Etcd3Provider{Client: client, LStrip: lstrip}
+
+			err = flywheel.OverridePayload(context.Background(), payload, overrider)
 			if err != nil {
 				msg := "overriding NGINX JSON failed"
 				log.Err(err).Msg(msg)
