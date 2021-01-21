@@ -1,8 +1,10 @@
 package flywheel
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -83,5 +85,52 @@ func TestOverrideDirective(t *testing.T) {
 
 	if !reflect.DeepEqual(directive.Args, []string{"dummyfoo"}) {
 		t.Errorf("failed to modify args")
+	}
+}
+
+func TestNewDirective(t *testing.T) {
+	var payload crossplane.Payload
+	if err := json.Unmarshal([]byte(parsedExample), &payload); err != nil {
+		t.Fatalf("failed to unmarshal test data: %v", err)
+	}
+
+	header := crossplane.Directive{
+		Directive: "add_header",
+		Args:      []string{"test", "me"},
+	}
+
+	// find base config i
+	var index int
+	for i, config := range payload.Config {
+		if strings.Contains(config.File, "nginx.conf") {
+			index = i
+			break
+		}
+	}
+
+	newDirectives(&payload.Config[index], header)
+	files, err := WritePayloadTmp(&payload, &crossplane.BuildOptions{})
+	if err != nil {
+		t.Fatalf("failed to write tmp files: %v", err)
+	}
+
+	file, err := os.Open(files[index].File.Name())
+	if err != nil {
+		t.Fatalf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	found := false
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if scanner.Text() == "add_header test me;" {
+			found = true
+		}
+	}
+	if found == false {
+		t.Fatalf("failed to find new line")
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
 	}
 }

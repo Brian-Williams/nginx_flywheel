@@ -17,17 +17,6 @@ type OverrideProvider interface {
 	Close() error
 }
 
-// UpdatedFile is a file with a reference to it's original location
-type UpdatedFile struct {
-	*os.File
-	OGName string
-}
-
-// Rename renames the file to the original location
-func (f UpdatedFile) Rename() error {
-	return os.Rename(f.File.Name(), f.OGName)
-}
-
 // WritePayload writes a payload to a file
 func WritePayload(p *crossplane.Payload, options *crossplane.BuildOptions) error {
 	for _, c := range p.Config {
@@ -38,6 +27,17 @@ func WritePayload(p *crossplane.Payload, options *crossplane.BuildOptions) error
 	}
 
 	return nil
+}
+
+// UpdatedFile is a file with a reference to it's original location
+type UpdatedFile struct {
+	*os.File
+	OGName string
+}
+
+// Rename renames the file to the original location
+func (f UpdatedFile) Rename() error {
+	return os.Rename(f.File.Name(), f.OGName)
 }
 
 // WritePayloadTmp writes the output to a tempdir and returns the files
@@ -142,4 +142,20 @@ func overrideDirective(ctx context.Context, d *crossplane.Directive, o OverrideP
 	}
 
 	return nil
+}
+
+type new string
+
+var (
+	// New is string indicator for a new directive
+	New                 = "NEW"
+	newComment          = "new directives from crossplane"
+	newCommentDirective = crossplane.Directive{Directive: "#", Comment: &newComment}
+)
+
+func newDirectives(c *crossplane.Config, d ...crossplane.Directive) {
+	c.Parsed = append(c.Parsed, newCommentDirective)
+	if len(d) != 0 {
+		c.Parsed = append(c.Parsed, d...)
+	}
 }
