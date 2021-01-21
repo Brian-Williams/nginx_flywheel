@@ -6,13 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aluttik/go-crossplane"
+
 	"github.com/Brian-Williams/nginx_flywheel/pkg"
 
 	"github.com/coreos/etcd/clientv3"
 )
 
 // New is the directive prefix for adding a directive
-var New string = "NEW"
+var New = "NEW"
 
 // Etcd3Provider is a OverrideProvider for etcd
 type Etcd3Provider struct {
@@ -70,5 +72,26 @@ func (e *Etcd3Provider) newDirectives(ctx context.Context, prefix string) ([]kv,
 			values: []string{string(v.Value)},
 		}
 	}
+
 	return kvs, nil
+}
+
+// NewDirectives gets the directives to be added for a given path
+func (e *Etcd3Provider) NewDirectives(ctx context.Context, path string) ([]crossplane.Directive, error) {
+	kvs, err := e.newDirectives(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	directives := make([]crossplane.Directive, len(kvs))
+	for i := range kvs {
+		kv := kvs[i]
+		directive := crossplane.Directive{
+			Directive: kv.key,
+			Args:      kv.values,
+		}
+		directives[i] = directive
+	}
+
+	return directives, nil
 }
