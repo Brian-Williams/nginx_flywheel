@@ -49,49 +49,34 @@ func (e *Etcd3Provider) DirectiveKey(directive, path string) string {
 	return strings.TrimPrefix(filepath.Clean(strings.TrimSuffix(path, filepath.Ext(path))), e.LStrip) + "/" + directive
 }
 
-type kv struct {
-	key    string
-	values []string
-}
-
-func (e *Etcd3Provider) newDirectives(ctx context.Context, prefix string) ([]kv, error) {
-	if !strings.HasSuffix(prefix, "/") {
-		prefix = prefix + "/"
+// NewDirectives gets the directives to be added for a given path
+//
+// The path is used as a new prefix search so must end with '/'
+func (e *Etcd3Provider) NewDirectives(ctx context.Context, path string) ([]crossplane.Directive, error) {
+	if !strings.HasSuffix(path, "/") {
+		path = path + "/"
 	}
 
-	r, err := e.Get(ctx, prefix+New, clientv3.WithPrefix())
+	r, err := e.Get(ctx, path+New, clientv3.WithPrefix())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get new directives: %w", err)
 	}
 
-	kvs := make([]kv, len(r.Kvs))
-	for i, v := range r.Kvs {
-		directive := strings.TrimPrefix(string(v.Key), New)
-		kvs[i] = kv{
-			key:    directive,
-			values: []string{string(v.Value)},
-		}
-	}
+	directives := kvToDirectives(r)
 
-	return kvs, nil
+	return directives, nil
 }
 
-// NewDirectives gets the directives to be added for a given path
-func (e *Etcd3Provider) NewDirectives(ctx context.Context, path string) ([]crossplane.Directive, error) {
-	kvs, err := e.newDirectives(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-
-	directives := make([]crossplane.Directive, len(kvs))
-	for i := range kvs {
-		kv := kvs[i]
+func kvToDirectives(r *clientv3.GetResponse) []crossplane.Directive {
+	directives := make([]crossplane.Directive, len(r.Kvs))
+	for i, v := range r.Kvs {
+		d := strings.TrimPrefix(string(v.Key), New)
 		directive := crossplane.Directive{
-			Directive: kv.key,
-			Args:      kv.values,
+			Directive: d,
+			Args:      []string{string(v.Value)},
 		}
 		directives[i] = directive
 	}
 
-	return directives, nil
+	return directives
 }
