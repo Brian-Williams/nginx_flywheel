@@ -17,17 +17,17 @@ func TestKVToDirectives(t *testing.T) {
 		Value: []byte("Dog"),
 	}
 	request := &clientv3.GetResponse{
-		Kvs: []*mvccpb.KeyValue{&kv},
+		Kvs: []*mvccpb.KeyValue{&kv, &kv},
 	}
 
 	directives := kvToDirectives(request)
 
-	key := directives[0].Directive
-	if key != "Cat" {
-		t.Errorf("Incorrect new key, expected 'Cat' got: %s", key)
-	}
-	value := directives[0].Args[0]
-	if value != "Dog" {
-		t.Errorf("Incorrect new value, expected 'Dog' got: %s", value)
+	for _, d := range directives {
+		if d.Directive != "Cat" {
+			t.Errorf("Incorrect new directive, expected 'Cat' got: %s", d.Directive)
+		}
+		if d.Args[0] != "Dog" {
+			t.Errorf("Incorrect new args, expected 'Dog' to be first item in args got: %s", d.Args)
+		}
 	}
 }
